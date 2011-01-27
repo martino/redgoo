@@ -1,4 +1,4 @@
-package main.java.eu.ahref;
+package eu.ahref;
 
 import com.jimplush.goose.Article;
 import com.jimplush.goose.Configuration;
