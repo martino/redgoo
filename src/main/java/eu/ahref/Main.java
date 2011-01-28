@@ -9,7 +9,11 @@ import org.apache.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 import redis.clients.jedis.Jedis;
+
+import java.io.IOException;
 import java.util.List;
+import java.util.Observable;
+import java.util.Observer;
 
 /**
  * Created by IntelliJ IDEA.
@@ -20,7 +24,7 @@ import java.util.List;
  */
 
 
-public class Main {
+public class Main implements Observer{
 
     private static final Logger logger = Logger.getLogger(Main.class);
 
@@ -31,7 +35,10 @@ public class Main {
     //TODO parametrizzarli
     String redgooNum = "redgoo:nsites";
     String redgooSiteList = "redgoo:kosites";
+    SignalHandler sh = null;
+    Boolean gracefulExit = false;
     Configuration gooseConfig;
+    int timeout = 30; // timeout for blpop
 
     public Main(String rurl, String jq, String gpath, String cpath, String ipath){
         redisURL = (rurl==null) ? "localhost" : rurl;
@@ -54,6 +61,20 @@ public class Main {
         gooseConfig.setImagemagickIdentifyPath("/usr/bin/identify");
     }
 
+    /**
+     * Function that handle signal
+     * @param observable
+     * @param o
+     */
+    public void update(Observable observable, Object o) {
+        gracefulExit = true;
+    }
+
+    public void setCommandHandle(){
+        sh = new SignalHandler();
+        sh.addObserver(this);
+        sh.handleSignal("TERM");
+    }
     public boolean connect(){
         try{
             jedis = new Jedis(redisURL);
@@ -63,15 +84,23 @@ public class Main {
             logger.error("Redis connection\n "+ e.getStackTrace().toString());
             return false;
         }
-   }
+    }
+
+    public void disconnect(){
+        try {
+            jedis.disconnect();
+        } catch (IOException e) {
+            logger.error("Redis disconnection\n"+e.getStackTrace().toString());
+        }
+    }
 
     public void go(){
-
-        boolean run = true;
         List<String> resultRedis;
-        while(run){
+        while(!gracefulExit){
             try{
-                resultRedis =  jedis.blpop(0,this.jobsQueue);
+                resultRedis =  jedis.blpop(timeout,this.jobsQueue);
+                if (resultRedis==null)
+                    continue;
                 String jswork = resultRedis.get(1);
                 JSONObject jwork = null;
                 String url=null;
@@ -116,6 +145,7 @@ public class Main {
                 this.connect();
             }
         }
+
     }
     public static void main(String[] args){
 
@@ -175,18 +205,15 @@ public class Main {
         }
 
 
-        Main ggoose = new Main(rip, qj, gpath, cpath, ipath);
-        if (!ggoose.connect())
+        Main redgoo = new Main(rip, qj, gpath, cpath, ipath);
+        redgoo.setCommandHandle();
+        if (!redgoo.connect())
             System.exit(1);
 
-        ggoose.go();
+        redgoo.go();
+        redgoo.disconnect();
         System.exit(0);
-        //ggoose.go("readability:jobs","readability:commands");
-        //System.out.println("Exit");
-
-        //ggoose.testUrl(error);
-        //ggoose.testjedis();
-
-
     }
+
+
 }
