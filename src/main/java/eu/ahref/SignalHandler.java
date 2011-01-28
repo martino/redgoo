@@ -5,11 +5,8 @@ import sun.misc.Signal;
 import java.util.Observable;
 
 /**
- * Created by IntelliJ IDEA.
- * User: martino
- * Date: 1/28/11
- * Time: 9:15 AM
- * To change this template use File | Settings | File Templates.
+ * Observable class that implements SUN SignalHandler
+ * @author Martino Pizzol
  */
 public class SignalHandler extends Observable implements sun.misc.SignalHandler{
     public void handle(Signal signal) {

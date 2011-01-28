@@ -16,18 +16,13 @@ import java.util.Observable;
 import java.util.Observer;
 
 /**
- * Created by IntelliJ IDEA.
- * User: martino
- * Date: 14/01/11
- * Time: 9.56
- * To change this template use File | Settings | File Templates.
+ * Redgoo main class
+ *
+ * @author  Martino Pizzol
  */
 
-
 public class Main implements Observer{
-
     private static final Logger logger = Logger.getLogger(Main.class);
-
 
     Jedis jedis;
     String redisURL;
@@ -67,6 +62,7 @@ public class Main implements Observer{
      * @param o
      */
     public void update(Observable observable, Object o) {
+        logger.info("Graceful exit");
         gracefulExit = true;
     }
 
