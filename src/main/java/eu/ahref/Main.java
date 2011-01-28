@@ -42,9 +42,6 @@ public class Main implements Observer{
         gooseConfig.setLocalStoragePath((gpath==null) ? "/tmp/goose" : gpath);
         gooseConfig.setImagemagickConvertPath((cpath==null) ? "/usr/bin/convert" : cpath);
         gooseConfig.setImagemagickIdentifyPath((ipath==null) ? "/usr/bin/identify" : ipath);
-
-
-        System.out.println(redisURL+ " "+jobsQueue);
     }
 
     public Main(){
