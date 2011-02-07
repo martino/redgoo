@@ -10,6 +10,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import redis.clients.jedis.Jedis;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Observable;
@@ -39,7 +40,7 @@ public class Main implements Observer{
         redisURL = (rurl==null) ? "localhost" : rurl;
         jobsQueue = (jq == null) ? "readability:jobs" : jq;
         gooseConfig = new Configuration();
-        gooseConfig.setLocalStoragePath((gpath==null) ? "/tmp/goose" : gpath);
+        gooseConfig.setLocalStoragePath(gpath);
         gooseConfig.setImagemagickConvertPath((cpath==null) ? "/usr/bin/convert" : cpath);
         gooseConfig.setImagemagickIdentifyPath((ipath==null) ? "/usr/bin/identify" : ipath);
     }
@@ -51,6 +52,21 @@ public class Main implements Observer{
         gooseConfig.setLocalStoragePath("/tmp/goose");
         gooseConfig.setImagemagickConvertPath("/usr/bin/convert");
         gooseConfig.setImagemagickIdentifyPath("/usr/bin/identify");
+    }
+
+    public static String createTempDirectory() throws IOException{
+        final File temp;
+
+        temp = File.createTempFile("temp", Long.toString(System.nanoTime()));
+
+        if(!(temp.delete()))
+            throw new IOException("Could not delete temp file: " + temp.getAbsolutePath());
+
+
+        if(!(temp.mkdir()))
+            throw new IOException("Could not create temp directory: " + temp.getAbsolutePath());
+
+        return temp.getAbsolutePath();
     }
 
     /**
@@ -197,6 +213,12 @@ public class Main implements Observer{
             System.exit(1);
         }
 
+        try {
+            gpath = (gpath==null) ? Main.createTempDirectory() : gpath;
+        } catch (IOException e) {
+            logger.debug("Create goose temp dir failed \n "+e.getStackTrace().toString());
+            System.exit(1);
+        }
 
         Main redgoo = new Main(rip, qj, gpath, cpath, ipath);
         redgoo.setCommandHandle();
