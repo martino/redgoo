@@ -27,6 +27,7 @@ public class Main implements Observer{
 
     Jedis jedis;
     String redisURL;
+    String gooseTmpDir = null;
     String jobsQueue;
     //TODO parametrizzarli
     String redgooNum = "redgoo:nsites";
@@ -36,11 +37,16 @@ public class Main implements Observer{
     Configuration gooseConfig;
     int timeout = 30; // timeout for blpop
 
+    public String getGooseTmpDir(){
+        return gooseTmpDir;
+    }
+
     public Main(String rurl, String jq, String gpath, String cpath, String ipath){
         redisURL = (rurl==null) ? "localhost" : rurl;
         jobsQueue = (jq == null) ? "readability:jobs" : jq;
         gooseConfig = new Configuration();
         gooseConfig.setLocalStoragePath(gpath);
+        gooseTmpDir = gpath;
         gooseConfig.setImagemagickConvertPath((cpath==null) ? "/usr/bin/convert" : cpath);
         gooseConfig.setImagemagickIdentifyPath((ipath==null) ? "/usr/bin/identify" : ipath);
     }
@@ -50,24 +56,13 @@ public class Main implements Observer{
         this.jobsQueue = "readability:jobs";
         gooseConfig = new Configuration();
         gooseConfig.setLocalStoragePath("/tmp/goose");
+        gooseTmpDir = "/tmp/goose";
         gooseConfig.setImagemagickConvertPath("/usr/bin/convert");
         gooseConfig.setImagemagickIdentifyPath("/usr/bin/identify");
     }
 
-    public static String createTempDirectory() throws IOException{
-        final File temp;
-
-        temp = File.createTempFile("temp", Long.toString(System.nanoTime()));
-
-        if(!(temp.delete()))
-            throw new IOException("Could not delete temp file: " + temp.getAbsolutePath());
 
 
-        if(!(temp.mkdir()))
-            throw new IOException("Could not create temp directory: " + temp.getAbsolutePath());
-
-        return temp.getAbsolutePath();
-    }
 
     /**
      * Function that handle signal
@@ -214,7 +209,7 @@ public class Main implements Observer{
         }
 
         try {
-            gpath = (gpath==null) ? Main.createTempDirectory() : gpath;
+            gpath = (gpath==null) ? DirectoryManager.createTempDirectory() : gpath;
         } catch (IOException e) {
             logger.debug("Create goose temp dir failed \n "+e.getStackTrace().toString());
             System.exit(1);
@@ -222,11 +217,14 @@ public class Main implements Observer{
 
         Main redgoo = new Main(rip, qj, gpath, cpath, ipath);
         redgoo.setCommandHandle();
-        if (!redgoo.connect())
+        if (!redgoo.connect()){
+            DirectoryManager.deleteDir(redgoo.getGooseTmpDir());
             System.exit(1);
+        }
 
         redgoo.go();
         redgoo.disconnect();
+        DirectoryManager.deleteDir(redgoo.getGooseTmpDir());
         System.exit(0);
     }
 
