@@ -1,20 +1,17 @@
 package eu.ahref;
 
-import com.jimplush.goose.Article;
 import com.jimplush.goose.Configuration;
-import com.jimplush.goose.ContentExtractor;
 import org.apache.commons.cli.*;
 import org.apache.log4j.Logger;
 
-import org.json.JSONException;
-import org.json.JSONObject;
 import redis.clients.jedis.Jedis;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Observable;
 import java.util.Observer;
+
+import java.util.concurrent.*;
 
 /**
  * Redgoo main class
@@ -35,33 +32,39 @@ public class Main implements Observer{
     SignalHandler sh = null;
     Boolean gracefulExit = false;
     Configuration gooseConfig;
+    ExecutorService pool = null;
     int timeout = 30; // timeout for blpop
 
     public String getGooseTmpDir(){
         return gooseTmpDir;
     }
 
-    public Main(String rurl, String jq, String gpath, String cpath, String ipath){
+    public Main(String rurl, String jq,  String cpath, String ipath){
         redisURL = (rurl==null) ? "localhost" : rurl;
         jobsQueue = (jq == null) ? "readability:jobs" : jq;
         gooseConfig = new Configuration();
-        gooseConfig.setLocalStoragePath(gpath);
-        gooseTmpDir = gpath;
         gooseConfig.setImagemagickConvertPath((cpath==null) ? "/usr/bin/convert" : cpath);
         gooseConfig.setImagemagickIdentifyPath((ipath==null) ? "/usr/bin/identify" : ipath);
+        this.createThreadPool();
     }
 
     public Main(){
         this.redisURL = "localhost";
         this.jobsQueue = "readability:jobs";
         gooseConfig = new Configuration();
-        gooseConfig.setLocalStoragePath("/tmp/goose");
-        gooseTmpDir = "/tmp/goose";
         gooseConfig.setImagemagickConvertPath("/usr/bin/convert");
         gooseConfig.setImagemagickIdentifyPath("/usr/bin/identify");
+        this.createThreadPool();
     }
 
+    public void createThreadPool(){
+        //TODO parameter for maximum thread
+        this.pool = Executors.newFixedThreadPool(5);
+    }
 
+    public void stopThreadPool(){
+        this.pool.shutdown();
+    }
 
 
     /**
@@ -106,44 +109,8 @@ public class Main implements Observer{
                 if (resultRedis==null)
                     continue;
                 String jswork = resultRedis.get(1);
-                JSONObject jwork = null;
-                String url=null;
-                try {
-                    jwork = new JSONObject(jswork);
-                    url = jwork.getString("url");
-                    logger.debug("URL: "+url);
-                    jedis.incr(this.redgooNum);
-                    //String original = jwork.getString("original");
-
-                    ContentExtractor contentExtractor = new ContentExtractor(gooseConfig);
-                    Article article = null;
-                    try{
-                        if(url != null){
-                            article = contentExtractor.extractContent(url);
-                        }/*else if(original!=null){
-                        //TODO capire come gestire il testo senza url
-
-                    }  */
-                        JSONObject jout = new JSONObject();
-                        jout.put("html", article.getCleanedArticleText());
-                        jout.put("title", article.getTitle());
-                        jout.put("image", article.getTopImage().getImageSrc());
-                        jout.put("domain", article.getDomain());
-                        jout.put("original",article.getOriginalDoc());
-                        jedis.publish(jwork.getString("id"),jout.toString());
-                    }catch(Exception e){
-                        JSONObject jerr = new JSONObject();
-                        jerr.put("status", "error");
-
-                        jedis.publish(jwork.getString("id"),jerr.toString());
-
-                        jedis.rpush(this.redgooSiteList,url);
-                        logger.debug("Goose exception\n"+ e.getStackTrace().toString());
-                    }
-                } catch (JSONException e) {
-                    logger.error("JSON exception\n"+e.getStackTrace().toString());
-                    return;
-                }
+                jedis.incr(this.redgooNum);
+                this.pool.execute(new GWorker(jswork, this.redisURL,logger, gooseConfig,redgooSiteList));
             }catch(Exception e){
                 logger.debug("Redis connection reset\n "+e.getStackTrace().toString());
                 this.connect();
@@ -208,23 +175,17 @@ public class Main implements Observer{
             System.exit(1);
         }
 
-        try {
-            gpath = (gpath==null) ? DirectoryManager.createTempDirectory() : gpath;
-        } catch (IOException e) {
-            logger.debug("Create goose temp dir failed \n "+e.getStackTrace().toString());
-            System.exit(1);
-        }
-
-        Main redgoo = new Main(rip, qj, gpath, cpath, ipath);
+        Main redgoo = new Main(rip, qj, cpath, ipath);
         redgoo.setCommandHandle();
         if (!redgoo.connect()){
+            redgoo.stopThreadPool();
             DirectoryManager.deleteDir(redgoo.getGooseTmpDir());
             System.exit(1);
         }
 
         redgoo.go();
+        redgoo.stopThreadPool();
         redgoo.disconnect();
-        DirectoryManager.deleteDir(redgoo.getGooseTmpDir());
         System.exit(0);
     }
 
