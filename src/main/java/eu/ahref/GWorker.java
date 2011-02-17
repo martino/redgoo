@@ -71,9 +71,10 @@ public class GWorker implements Runnable {
             }catch(Exception e){
                JSONObject jerr = new JSONObject();
                jerr.put("status", "error");
-
+               jedis.publish(jwork.getString("id"),jerr.toString());
                jedis.rpush(this.redgooSiteList,url);
                logger.debug("Goose exception\n"+ e.getStackTrace().toString());
+
             }
         } catch (JSONException e) {
             logger.error("JSON exception\n"+e.getStackTrace().toString());
