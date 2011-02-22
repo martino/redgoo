@@ -1,10 +1,13 @@
 package eu.ahref;
 
 import com.jimplush.goose.Configuration;
+
 import org.apache.commons.cli.*;
+import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.log4j.Logger;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 import java.io.IOException;
 import java.util.List;
@@ -97,19 +100,25 @@ public class Main implements Observer{
         try {
             jedis.disconnect();
         } catch (IOException e) {
-            logger.error("Redis disconnection\n"+e.getStackTrace().toString());
+            logger.error("Redis disconnection\n "+ e.getStackTrace().toString());
         }
+
     }
 
     public void go(){
         List<String> resultRedis;
+
         while(!gracefulExit){
             try{
                 resultRedis =  jedis.blpop(timeout,this.jobsQueue);
-                if (resultRedis==null)
+                if (resultRedis==null){
+                    System.gc();
                     continue;
+                }
+
                 String jswork = resultRedis.get(1);
                 jedis.incr(this.redgooNum);
+                System.gc();
                 this.pool.execute(new GWorker(jswork, this.redisURL,logger, gooseConfig,redgooSiteList));
             }catch(Exception e){
                 logger.debug("Redis connection reset\n "+e.getStackTrace().toString());
@@ -179,7 +188,7 @@ public class Main implements Observer{
         redgoo.setCommandHandle();
         if (!redgoo.connect()){
             redgoo.stopThreadPool();
-            DirectoryManager.deleteDir(redgoo.getGooseTmpDir());
+            RgUtils.deleteDir(redgoo.getGooseTmpDir());
             System.exit(1);
         }
 

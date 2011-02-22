@@ -9,6 +9,7 @@ import org.json.JSONObject;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 
 
 /**
@@ -26,13 +27,14 @@ public class GWorker implements Runnable {
     String redgooSiteList;
 
 
-    public GWorker(String tsk, String connUrl,Logger log, Configuration gConfig,String rsl){
-        this.jedis = new Jedis(connUrl);
+    public GWorker(String tsk, String conn,Logger log, Configuration gConfig,String rsl){
+        this.jedis = new Jedis(conn);
+
         this.jswork = tsk;
         this.logger = log;
         this.gooseConfig = gConfig;
         try {
-            gpath = DirectoryManager.createTempDirectory();
+            gpath = RgUtils.createTempDirectory();
         } catch (IOException e) {
             logger.debug("Create goose temp dir failed \n "+e.getStackTrace().toString());
             return;
@@ -46,6 +48,7 @@ public class GWorker implements Runnable {
         String url=null;
 
         try {
+            jedis.connect();
             jwork = new JSONObject(jswork);
             url = jwork.getString("url");
             logger.debug("URL: "+url);
@@ -60,32 +63,42 @@ public class GWorker implements Runnable {
                 }/*else if(original!=null){
                     //TODO capire come gestire il testo senza url
                 }  */
+
                 JSONObject jout = new JSONObject();
                 jout.put("html", article.getCleanedArticleText());
                 jout.put("title", article.getTitle());
                 jout.put("image", article.getTopImage().getImageSrc());
                 jout.put("domain", article.getDomain());
                 jout.put("original",article.getOriginalDoc());
+
+                article = null;
                 jedis.publish(jwork.getString("id"),jout.toString());
 
             }catch(Exception e){
                JSONObject jerr = new JSONObject();
                jerr.put("status", "error");
                jedis.publish(jwork.getString("id"),jerr.toString());
-               jedis.rpush(this.redgooSiteList,url);
+               jedis.rpush(this.redgooSiteList,url+" "+RgUtils.getDateTime());
                logger.debug("Goose exception\n"+ e.getStackTrace().toString());
 
             }
         } catch (JSONException e) {
             logger.error("JSON exception\n"+e.getStackTrace().toString());
-        }finally {
+
+        } catch (UnknownHostException e) {
+            e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+        } catch (IOException e) {
+            e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+        } finally {
             //TODO cancellare la directory quando finisice il thread
-            DirectoryManager.deleteDir(gpath);
+            RgUtils.deleteDir(gpath);
             try {
                 jedis.disconnect();
+                jedis = null;
             } catch (IOException e) {
                 logger.error("Redis disconnection\n"+e.getStackTrace().toString());
             }
+
 
         }
 

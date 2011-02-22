@@ -2,13 +2,15 @@ package eu.ahref;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 
 /**
  * Class for directory management
  *
  * @author Martino Pizzol
  */
-public class DirectoryManager {
+public class RgUtils {
     public static String createTempDirectory() throws IOException {
         final File temp;
         temp = File.createTempFile("temp", Long.toString(System.nanoTime()));
@@ -34,6 +36,12 @@ public class DirectoryManager {
             }
         }
         return dir.delete();
+    }
+
+    public static String getDateTime(){
+        Calendar cal  = Calendar.getInstance();
+        SimpleDateFormat df = new SimpleDateFormat("yy.MM.dd hh:mm:ss");
+        return df.format(cal.getTime());
     }
 
 
